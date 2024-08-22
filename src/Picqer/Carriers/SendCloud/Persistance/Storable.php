@@ -13,6 +13,10 @@ use Picqer\Carriers\SendCloud\Connection;
  */
 trait Storable
 {
+    /**
+     * @return $this
+     * @throws \Picqer\Carriers\SendCloud\SendCloudApiException
+     */
     public function save($options = [])
     {
         if ($this->exists()) {
@@ -24,16 +28,28 @@ trait Storable
         return $this;
     }
 
+    /**
+     * @return array
+     * @throws \Picqer\Carriers\SendCloud\SendCloudApiException
+     */
     public function insert(array $options = [])
     {
         return $this->connection()->post($this->url, $this->json(), $options);
     }
 
+    /**
+     * @return array
+     * @throws \Picqer\Carriers\SendCloud\SendCloudApiException
+     */
     public function update(array $options = [])
     {
         return $this->connection()->put($this->url . '/' . urlencode($this->id), $this->json(), $options);
     }
 
+    /**
+     * @return array
+     * @throws \Picqer\Carriers\SendCloud\SendCloudApiException
+     */
     public function delete(array $options = [])
     {
         return $this->connection()->delete($this->url . '/' . urlencode($this->id), $options);

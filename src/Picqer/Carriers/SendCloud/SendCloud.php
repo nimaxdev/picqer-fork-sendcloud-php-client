@@ -66,4 +66,14 @@ class SendCloud
     {
         return $this->senderAddresses();
     }
+
+    /**
+     * ServicePoint Resource
+     *
+     * @return ServicePoint
+     */
+    public function servicePoints()
+    {
+        return new ServicePoint($this->connection);
+    }
 }

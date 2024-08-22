@@ -57,6 +57,18 @@ $documentDownloader = new \Picqer\Carriers\SendCloud\DocumentDownloader($connect
 $labelContents = $documentDownloader->getDocument($labelUrl, 'pdf');
 ```
 
+## Service points
+```php
+$params = [
+    'country' => 'BE',
+    'ne_latitude' => '50.91442',
+    'ne_longitude' => '3.4763499',
+    'sw_latitude' => '50.84507',
+    'sw_longitude' => '3.3206277',
+];
+$servicePoints = $sendcloudClient->servicePoints()->get($params);
+```
+
 ## Exceptions
 Actions to the API may cause an Exception to be thrown in case something went wrong
 ```php

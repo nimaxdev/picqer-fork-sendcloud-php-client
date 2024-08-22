@@ -37,6 +37,11 @@ abstract class Model
         'plural' => ''
     ];
 
+    /**
+     * Model constructor.
+     * @param Connection $connection
+     * @param array $attributes
+     */
     public function __construct(Connection $connection, array $attributes = [])
     {
         $this->connection = $connection;
@@ -48,7 +53,7 @@ abstract class Model
      *
      * @return Connection
      */
-    public function connection()
+    public function connection(): Connection
     {
         return $this->connection;
     }
@@ -58,7 +63,7 @@ abstract class Model
      *
      * @return array
      */
-    public function attributes()
+    public function attributes(): array
     {
         return $this->attributes;
     }
@@ -68,7 +73,7 @@ abstract class Model
      *
      * @param array $attributes
      */
-    protected function fill(array $attributes)
+    protected function fill(array $attributes): void
     {
         if (array_key_exists($this->namespaces['singular'], $attributes)) {
             $attributes = $attributes[$this->namespaces['singular']];
@@ -87,7 +92,7 @@ abstract class Model
      * @param array $attributes
      * @return array
      */
-    protected function fillableFromArray(array $attributes)
+    protected function fillableFromArray(array $attributes): array
     {
         if (count($this->fillable) > 0) {
             return array_intersect_key($attributes, array_flip($this->fillable));
@@ -96,16 +101,28 @@ abstract class Model
         return $attributes;
     }
 
-    protected function isFillable($key)
+    /**
+     * @param $key
+     * @return bool
+     */
+    protected function isFillable($key): bool
     {
         return in_array($key, $this->fillable);
     }
 
-    protected function setAttribute($key, $value)
+    /**
+     * @param $key
+     * @param $value
+     */
+    protected function setAttribute($key, $value): void
     {
         $this->attributes[$key] = $value;
     }
 
+    /**
+     * @param $key
+     * @return mixed|null
+     */
     public function __get($key)
     {
         if (isset($this->attributes[$key])) {
@@ -115,32 +132,49 @@ abstract class Model
         return null;
     }
 
-    public function __isset($key)
+    /**
+     * @param $key
+     * @return bool
+     */
+    public function __isset($key): bool
     {
         return isset($this->attributes[$key]);
     }
 
-    public function __set($key, $value)
+    /**
+     * @param $key
+     * @param $value
+     */
+    public function __set($key, $value): void
     {
         if ($this->isFillable($key)) {
             $this->setAttribute($key, $value);
         }
     }
 
-    public function exists()
+    /**
+     * @return bool
+     */
+    public function exists(): bool
     {
         if ( ! in_array($this->primaryKey, $this->attributes)) return false;
 
         return ! empty($this->attributes[$this->primaryKey]);
     }
 
-    public function json()
+    /**
+     * Returns the JSON representation of a value
+     * @link https://php.net/manual/en/function.json-encode.php
+     * @param int $options [optional] Bitmask consisting of JSON constants
+     * @param int $depth   [optional] Set the maximum depth. Must be greater than zero.
+     * @return string|false a JSON encoded string on success or FALSE on failure.
+     */
+    public function json($options = 0, $depth = 512)
     {
         $json = [
             $this->namespaces['singular'] => $this->attributes
         ];
-
-        return json_encode($json);
+        return json_encode($json, $options, $depth);
     }
 
     /**

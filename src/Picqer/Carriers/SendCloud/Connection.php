@@ -5,7 +5,11 @@ namespace Picqer\Carriers\SendCloud;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\HandlerStack;
+use Iterator;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamInterface;
+use Psr\Http\Message\UriInterface;
+use RuntimeException;
 
 class Connection
 {
@@ -15,14 +19,76 @@ class Connection
     private ?string $partnerId = null;
     private ?int $maxResponseSizeInBytes = null;
 
+    /**
+     * Contains the HTTP client (Guzzle)
+     * @var Client
+     */
     private ?Client $client = null;
+  
+    /**
+     * Array of inserted middleWares
+     * @var array
+     */
     protected array $middleWares = [];
+
+    protected $headers = [];
+
+    /**
+     * @return array
+     */
+    public function getHeaders()
+    {
+        return $this->headers;
+    }
+
+    /**
+     * @param array $headers
+     * @return Connection
+     */
+    public function setHeaders(array $headers)
+    {
+        $this->headers = $headers;
+        $this->client = null;
+        return $this;
+    }
+
+    /**
+     * @return Connection
+     */
+    public function setHeadersJson()
+    {
+        return $this->setHeaders([
+            'Accept'       => 'application/json',
+            'Content-Type' => 'application/json',
+        ]);
+    }
+
+    /**
+     * @return Connection
+     */
+    public function setHeadersPdf()
+    {
+        return $this->setHeaders([
+            'Accept' => 'application/pdf',
+        ]);
+    }
+
+    /**
+     * @return Connection
+     */
+    public function setHeadersZpl()
+    {
+        return $this->setHeaders([
+            'Accept' => 'application/zpl',
+        ]);
+    }
 
     public function __construct(string $apiKey, string $apiSecret, ?string $partnerId = null)
     {
         $this->apiKey = $apiKey;
         $this->apiSecret = $apiSecret;
         $this->partnerId = $partnerId;
+        $this->setHeadersJson();
     }
 
     public function client(): Client
@@ -38,15 +104,12 @@ class Connection
 
         $clientConfig = [
             'base_uri' => $this->apiUrl(),
-            'headers' => [
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json'
-            ],
-            'auth' => [$this->apiKey, $this->apiSecret],
-            'handler' => $handlerStack
+            'headers'  => $this->getHeaders(),
+            'auth'     => [$this->apiKey, $this->apiSecret],
+            'handler'  => $handlerStack,
         ];
 
-        if (! is_null($this->partnerId)) {
+        if (!is_null($this->partnerId)) {
             $clientConfig['headers']['Sendcloud-Partner-Id'] = $this->partnerId;
         }
 
@@ -65,6 +128,23 @@ class Connection
         return $this->apiUrl;
     }
 
+    /**
+     * Return the api key
+     *
+     * @return string
+     */
+    public function getApiKey(): string
+    {
+        return $this->apiKey;
+    }
+
+    /**
+     * Perform a GET request
+     * @param string|UriInterface $url
+     * @param array               $params
+     * @return array
+     * @throws SendCloudApiException
+     */
     public function get($url, $params = []): array
     {
         try {
@@ -75,10 +155,24 @@ class Connection
                 $this->parseResponse($e->getResponse());
             }
 
-            throw new SendCloudApiException('SendCloud error: (no error message provided)' . $e->getResponse(), $e->getResponse()->getStatusCode());
+            if ($statusCode = $e->getResponse()) {
+                $statusCode = $statusCode->getStatusCode();
+            } else {
+                $statusCode = 0;
+            }
+            throw new SendCloudApiException(
+                'SendCloud error: (no error message provided)' . $e->getResponse(), $statusCode
+            );
         }
     }
 
+    /**
+     * Perform a POST request
+     * @param string|UriInterface                                    $url
+     * @param string|null|resource|StreamInterface|callable|Iterator $body
+     * @return array
+     * @throws SendCloudApiException
+     */
     public function post($url, $body, $query = []): array
     {
         try {
@@ -93,6 +187,13 @@ class Connection
         }
     }
 
+    /**
+     * Perform PUT request
+     * @param string|UriInterface                                    $url
+     * @param string|null|resource|StreamInterface|callable|Iterator $body
+     * @return array
+     * @throws SendCloudApiException
+     */
     public function put($url, $body, $query = []): array
     {
         try {
@@ -107,6 +208,12 @@ class Connection
         }
     }
 
+    /**
+     * Perform DELETE request
+     * @param string|UriInterface $url
+     * @return array
+     * @throws SendCloudApiException
+     */
     public function delete($url, $query = []): array
     {
         try {
@@ -121,6 +228,11 @@ class Connection
         }
     }
 
+    /**
+     * @param ResponseInterface $response
+     * @return array Parsed JSON result
+     * @throws SendCloudApiException
+     */
     public function parseResponse(ResponseInterface $response): array
     {
         try {
@@ -143,7 +255,6 @@ class Connection
                     $response->getStatusCode(),
                     $responseBody
                 ), $response->getStatusCode());
-            }
 
             if (
                 array_key_exists('error', $resultArray)
@@ -152,9 +263,13 @@ class Connection
             ) {
                 throw new SendCloudApiException('SendCloud error: ' . $resultArray['error']['message'], $resultArray['error']['code']);
             }
+            // handle cancel parcel return
+            if (array_key_exists('message', $resultArray) && $response->getStatusCode() >= 400) {
+                throw new SendCloudApiException('SendCloud error: ' . $resultArray['message'], $response->getStatusCode());
+            }
 
             return $resultArray;
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             throw new SendCloudApiException('SendCloud error: ' . $e->getMessage());
         }
     }
@@ -170,7 +285,7 @@ class Connection
     /**
      * @deprecated
      */
-    public function setEnvironment($environment): void
+    public function setEnvironment(string $environment): void
     {
         if ($environment === 'test') {
             throw new SendCloudApiException('SendCloud test environment is no longer available');
@@ -186,8 +301,17 @@ class Connection
     {
         return $this->maxResponseSizeInBytes;
     }
-
-    public function download($url, array $headers = ['Accept' => 'application/pdf']): string
+  
+    /**
+     * Download a resource.
+     *
+     * @param string|UriInterface $url relative to apiUrl or absolute
+     * @param array               $headers
+     * @return string
+     * @throws SendCloudApiException
+     * @throws RuntimeException if unable to read or an error occurs while reading.
+     */
+    public function download(string $url, array $headers = ['Accept' => 'application/pdf']): string
     {
         try {
             $result = $this->client()->get($url, ['headers' => $headers]);
